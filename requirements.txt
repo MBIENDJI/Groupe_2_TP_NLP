@@ -12,4 +12,7 @@ joblib
 scikit-learn
 gTTS
 python-dotenv
+requests
 langsmith
+langchain
+huggingface-hub
