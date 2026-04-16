@@ -5,7 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 import sys
 import os
-import traceback
+from datetime import datetime, timedelta
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -24,59 +24,43 @@ st.markdown("**LSTM · Prophet · NeuralProphet**")
 st.markdown("---")
 
 # ============================================================
+# FONCTION DE FALLBACK (données simulées)
+# ============================================================
+
+def get_fallback_data(company):
+    """Génère des données simulées si l'API échoue"""
+    np.random.seed(42)
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=730)
+    dates = pd.date_range(start=start_date, end=end_date, freq='D')
+    
+    # Prix simulé avec tendance aléatoire
+    base_price = 100 + np.random.randn() * 50
+    trend = np.linspace(0, np.random.randn() * 30, len(dates))
+    noise = np.random.randn(len(dates)) * 5
+    prices = base_price + trend + noise
+    prices = np.maximum(prices, 10)
+    
+    df = pd.DataFrame({'Close': prices}, index=dates)
+    df.index = df.index.tz_localize(None)
+    return df
+
+# ============================================================
 # FONCTIONS
 # ============================================================
 
 def make_chart(df, predictions_dict, company, months):
-    """Crée le graphique des prédictions"""
     fig = go.Figure()
-    
-    # Historique (90 derniers jours)
     hist = df.tail(90)
-    fig.add_trace(go.Scatter(
-        x=hist.index,
-        y=hist['Close'].values.flatten(),
-        name='📈 Historique',
-        line=dict(color='#00ff88', width=2.5)
-    ))
-    
-    # Couleurs des modèles
+    fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'].values.flatten(), name='📈 Historique', line=dict(color='#00ff88', width=2.5)))
     colors = {'LSTM': '#00b4d8', 'Prophet': '#ff6b35', 'NeuralProphet': '#9b59b6'}
-    
-    # Prédictions
     for name, data in predictions_dict.items():
-        fig.add_trace(go.Scatter(
-            x=data['dates'],
-            y=data['preds'],
-            name=f'🔮 {name}',
-            line=dict(color=colors.get(name, '#ffffff'), width=2, dash='dash')
-        ))
-    
-    # Point aujourd'hui
-    fig.add_trace(go.Scatter(
-        x=[df.index[-1]],
-        y=[float(df['Close'].iloc[-1])],
-        mode='markers',
-        name="📍 Aujourd'hui",
-        marker=dict(size=14, color='#ff4444', symbol='star')
-    ))
-    
-    fig.update_layout(
-        title=f"📊 {company} — {months} mois",
-        xaxis_title="Date",
-        yaxis_title="Prix ($)",
-        template="plotly_dark",
-        plot_bgcolor='rgba(0,0,0,0.2)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white'),
-        height=500,
-        hovermode='x unified'
-    )
-    
+        fig.add_trace(go.Scatter(x=data['dates'], y=data['preds'], name=f'🔮 {name}', line=dict(color=colors.get(name, '#fff'), width=2, dash='dash')))
+    fig.add_trace(go.Scatter(x=[df.index[-1]], y=[float(df['Close'].iloc[-1])], mode='markers', name="📍 Aujourd'hui", marker=dict(size=14, color='#ff4444', symbol='star')))
+    fig.update_layout(title=f"📊 {company} — {months} mois", xaxis_title="Date", yaxis_title="Prix ($)", template="plotly_dark", height=500)
     return fig
 
 def compute_metrics(actual, predicted):
-    """Calcule MAPE et RMSE"""
     actual = np.array(actual).flatten()
     predicted = np.array(predicted).flatten()
     n = min(len(actual), len(predicted))
@@ -114,21 +98,23 @@ with c3:
 # ============================================================
 
 @st.cache_data(ttl=3600)
-def get_data_cached(name):
-    """Données avec cache et gestion d'erreur"""
+def get_data_safe(company):
+    """Récupère les données ou utilise fallback"""
     try:
-        df = get_stock_data(name)
-        if df is None or df.empty:
-            return None
-        return df
+        df = get_stock_data(company)
+        if df is not None and not df.empty and len(df) >= 30 and 'Close' in df.columns:
+            return df
     except Exception as e:
-        print(f"Erreur get_data_cached: {e}")
-        return None
+        st.warning(f"⚠️ API Yahoo: {str(e)[:50]}")
+    
+    # FALLBACK - données simulées
+    st.info(f"📊 Utilisation de données simulées pour {company} (API temporairement indisponible)")
+    return get_fallback_data(company)
 
 @st.cache_resource
-def get_lstm_cached(name):
+def get_lstm_safe(company):
     try:
-        return load_lstm(name)
+        return load_lstm(company)
     except:
         return None
 
@@ -138,78 +124,65 @@ def get_lstm_cached(name):
 
 if st.button("🚀 Lancer les prédictions", type="primary", use_container_width=True):
     
-    # 1. CHARGEMENT DES DONNÉES AVEC VÉRIFICATION
-    with st.spinner("📡 Téléchargement des données..."):
-        df = get_data_cached(company)
+    # Chargement des données (avec fallback garanti)
+    with st.spinner("📡 Chargement des données..."):
+        df = get_data_safe(company)
     
-    # VÉRIFICATION CRITIQUE
-    if df is None:
-        st.error(f"❌ Impossible de charger les données pour {company}.")
-        st.info("💡 Vérifiez votre connexion internet ou réessayez dans quelques minutes.")
+    # Vérification finale (normalement toujours OK grâce au fallback)
+    if df is None or df.empty:
+        st.error("❌ Erreur critique: impossible de charger les données")
         st.stop()
     
-    if df.empty:
-        st.error(f"❌ Aucune donnée trouvée pour {company}.")
-        st.stop()
-    
-    if len(df) < 30:
-        st.warning(f"⚠️ Données insuffisantes: {len(df)} jours seulement. Minimum 30 jours requis.")
-        st.stop()
-    
-    # Vérifier la colonne Close
     if 'Close' not in df.columns:
-        st.error(f"❌ Colonne 'Close' manquante pour {company}.")
+        st.error("❌ Colonne Close manquante")
         st.stop()
     
     current_price = float(df['Close'].iloc[-1])
-    st.success(f"✅ Données chargées: {len(df)} jours | Prix actuel: **${current_price:.2f}**")
+    st.success(f"✅ Données: {len(df)} jours | Prix: **${current_price:.2f}**")
     
-    # 2. PRÉDICTIONS
     predictions_dict = {}
     
     # LSTM
     if use_lstm:
-        with st.spinner("🔮 Prédiction LSTM..."):
+        with st.spinner("🔮 LSTM..."):
             try:
-                model = get_lstm_cached(company)
+                model = get_lstm_safe(company)
                 if model:
                     dates, preds = predict_lstm(model, df, months)
                     if dates is not None and preds is not None:
                         predictions_dict['LSTM'] = {'dates': dates, 'preds': preds}
-                        st.success("✅ LSTM terminé")
+                        st.success("✅ LSTM")
                     else:
                         st.warning("⚠️ LSTM: prédiction vide")
                 else:
                     st.warning("⚠️ Modèle LSTM non trouvé")
             except Exception as e:
-                st.warning(f"⚠️ LSTM erreur: {str(e)[:100]}")
+                st.warning(f"⚠️ LSTM: {str(e)[:80]}")
     
     # Prophet
     if use_prophet:
-        with st.spinner("📊 Prédiction Prophet..."):
+        with st.spinner("📊 Prophet..."):
             try:
                 model = load_prophet_from_json(company)
                 if model is None:
-                    st.info("📊 Prophet: entraînement en cours...")
                     model, _ = train_prophet(df)
                 dates, preds = predict_prophet(model, df, months)
                 predictions_dict['Prophet'] = {'dates': dates, 'preds': preds}
-                st.success("✅ Prophet terminé")
+                st.success("✅ Prophet")
             except Exception as e:
-                st.warning(f"⚠️ Prophet erreur: {str(e)[:100]}")
+                st.warning(f"⚠️ Prophet: {str(e)[:80]}")
     
     # NeuralProphet
     if use_neural and check_neuralprophet():
-        with st.spinner("🧠 Prédiction NeuralProphet (peut prendre 1-2 min)..."):
+        with st.spinner("🧠 NeuralProphet..."):
             try:
                 np_model, np_df = train_neuralprophet(df)
                 dates, preds = predict_neuralprophet(np_model, np_df, df, months)
                 predictions_dict['NeuralProphet'] = {'dates': dates, 'preds': preds}
-                st.success("✅ NeuralProphet terminé")
+                st.success("✅ NeuralProphet")
             except Exception as e:
-                st.warning(f"⚠️ NeuralProphet erreur: {str(e)[:100]}")
+                st.warning(f"⚠️ NeuralProphet: {str(e)[:80]}")
     
-    # 3. AFFICHAGE DES RÉSULTATS
     if predictions_dict:
         st.session_state['stock_predictions'] = predictions_dict
         st.session_state['stock_current_price'] = current_price
@@ -218,10 +191,10 @@ if st.button("🚀 Lancer les prédictions", type="primary", use_container_width
         st.session_state['stock_df'] = df
         st.rerun()
     else:
-        st.error("❌ Aucune prédiction générée. Vérifiez les modèles.")
+        st.error("❌ Aucune prédiction générée")
 
 # ============================================================
-# AFFICHAGE DES RÉSULTATS (après prédiction)
+# AFFICHAGE
 # ============================================================
 
 if 'stock_predictions' in st.session_state:
@@ -232,16 +205,15 @@ if 'stock_predictions' in st.session_state:
     df = st.session_state.get('stock_df')
     
     if df is not None:
-        # GRAPHIQUE
+        # Graphique
         st.markdown("---")
         st.subheader("📈 Courbes des prédictions")
         fig = make_chart(df, predictions_dict, company, months)
         st.plotly_chart(fig, use_container_width=True)
         
-        # STATISTIQUES ET MÉTRIQUES
+        # Métriques
         st.subheader("📊 Comparaison des modèles")
         
-        # Calculer les métriques
         hist_prices = df['Close'].values.flatten()[-60:]
         
         rows = []
@@ -252,8 +224,6 @@ if 'stock_predictions' in st.session_state:
             preds = data['preds']
             final_price = float(preds[-1])
             variation = (final_price - current_price) / current_price * 100
-            
-            # MAPE sur les 60 premiers jours de prédiction
             mape, rmse = compute_metrics(hist_prices, preds[:60])
             
             rows.append({
@@ -264,50 +234,27 @@ if 'stock_predictions' in st.session_state:
                 "RMSE": f"${rmse:.2f}"
             })
             
-            cols[i + 1].metric(
-                f"🔮 {name}",
-                f"${final_price:.2f}",
-                f"{variation:+.1f}%"
-            )
+            cols[i + 1].metric(f"🔮 {name}", f"${final_price:.2f}", f"{variation:+.1f}%")
         
-        # Tableau détaillé
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         
         # Graphique barres
-        st.subheader("📊 Comparaison visuelle des prix finaux")
+        st.subheader("📊 Comparaison visuelle")
         fig_bar = go.Figure()
         for name, data in predictions_dict.items():
             final = float(data['preds'][-1])
-            fig_bar.add_trace(go.Bar(
-                x=[name],
-                y=[final],
-                text=f"${final:.2f}",
-                textposition='auto',
-                name=name
-            ))
-        fig_bar.add_trace(go.Bar(
-            x=["Prix actuel"],
-            y=[current_price],
-            text=f"${current_price:.2f}",
-            textposition='auto',
-            name="Prix actuel",
-            marker_color='#00ff88'
-        ))
-        fig_bar.update_layout(
-            title="Comparaison des prix finaux",
-            yaxis_title="Prix ($)",
-            template="plotly_dark",
-            height=400
-        )
+            fig_bar.add_trace(go.Bar(x=[name], y=[final], text=f"${final:.2f}", textposition='auto', name=name))
+        fig_bar.add_trace(go.Bar(x=["Prix actuel"], y=[current_price], text=f"${current_price:.2f}", textposition='auto', name="Prix actuel", marker_color='#00ff88'))
+        fig_bar.update_layout(title="Comparaison des prix finaux", yaxis_title="Prix ($)", template="plotly_dark", height=400)
         st.plotly_chart(fig_bar, use_container_width=True)
         
         # Évolution mensuelle
-        st.subheader("📅 Évolution mensuelle détaillée")
+        st.subheader("📅 Évolution mensuelle")
         evo_rows = []
         for name, data in predictions_dict.items():
             preds = data['preds']
             row = {"Modèle": name}
-            step = 21  # 1 mois ≈ 21 jours
+            step = 21
             for m in range(0, min(len(preds), step * 4), step):
                 month_num = m // step + 1
                 row[f"Mois {month_num}"] = f"${preds[min(m, len(preds)-1)]:.2f}"
@@ -315,10 +262,10 @@ if 'stock_predictions' in st.session_state:
             evo_rows.append(row)
         st.dataframe(pd.DataFrame(evo_rows), use_container_width=True, hide_index=True)
         
-        # CHATBOT FINANCIER
+        # Chatbot
         st.markdown("---")
-        st.subheader("💬 Chatbot Financier Intelligent")
-        st.info(f"📊 **{company}** | {months} mois | Prix actuel: **${current_price:.2f}**")
+        st.subheader("💬 Chatbot Financier")
+        st.info(f"📊 **{company}** | {months} mois | Prix: **${current_price:.2f}**")
         
         if 'stock_chat_history' not in st.session_state:
             st.session_state['stock_chat_history'] = []
@@ -327,27 +274,22 @@ if 'stock_predictions' in st.session_state:
             with st.chat_message(msg['role']):
                 st.write(msg['content'])
         
-        user_input = st.chat_input("Posez une question sur cette action...")
+        user_input = st.chat_input("Posez une question...")
         if user_input:
             st.session_state['stock_chat_history'].append({"role": "user", "content": user_input})
             with st.chat_message("user"):
                 st.write(user_input)
             
-            with st.spinner("🤔 Réflexion..."):
+            with st.spinner("Réflexion..."):
                 lstm_pred = float(predictions_dict.get('LSTM', {}).get('preds', [0])[-1]) if 'LSTM' in predictions_dict else 0
                 prophet_pred = float(predictions_dict.get('Prophet', {}).get('preds', [0])[-1]) if 'Prophet' in predictions_dict else 0
                 neural_pred = float(predictions_dict.get('NeuralProphet', {}).get('preds', [0])[-1]) if 'NeuralProphet' in predictions_dict else 0
                 
-                response = chat_stock(
-                    company, months,
-                    lstm_pred, prophet_pred, neural_pred,
-                    st.session_state['stock_chat_history']
-                )
+                response = chat_stock(company, months, lstm_pred, prophet_pred, neural_pred, st.session_state['stock_chat_history'])
             
             st.session_state['stock_chat_history'].append({"role": "assistant", "content": response})
             with st.chat_message("assistant"):
                 st.write(response)
 
-# Footer
 st.markdown("---")
-st.caption("⚠️ Ces prédictions sont générées par des modèles d'intelligence artificielle. Elles ne constituent pas un conseil financier. Investissez prudemment.")
+st.caption("⚠️ Prédictions IA - Pas un conseil financier")
