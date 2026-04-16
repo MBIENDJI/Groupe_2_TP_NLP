@@ -22,6 +22,9 @@ st.title("🏥 Détection Maladies Rénales")
 st.markdown("Classification par **CNN EfficientNet-B0**")
 st.markdown("---")
 
+# Seuil de confiance minimum
+CONFIDENCE_THRESHOLD = 0.70
+
 
 # ============================================================
 # CHARGEMENT MODÈLE
@@ -46,7 +49,8 @@ except Exception as e:
 if st.button("🔄 Recommencer une nouvelle analyse"):
     for key in ['kidney_disease_fr', 'kidney_confidence',
                 'kidney_response', 'kidney_history',
-                'kidney_summary', 'kidney_german']:
+                'kidney_summary', 'kidney_german',
+                'kidney_rejected']:
         if key in st.session_state:
             del st.session_state[key]
     st.rerun()
@@ -68,41 +72,75 @@ if uploaded:
 
     with col1:
         st.image(image,
-                 caption          = "Image CT chargée",
+                 caption             = "Image CT chargée",
                  use_container_width = True)
 
     with col2:
-        if st.button("🔬 Analyser l'image",
-                     type="primary"):
+        if st.button("🔬 Analyser l'image", type="primary"):
             with st.spinner("Analyse CNN en cours..."):
                 en, fr, conf, probs = predict_kidney(
                     cnn_model, image)
 
-            st.session_state['kidney_disease_fr'] = fr
-            st.session_state['kidney_confidence'] = conf
-            st.session_state['kidney_history']    = []
+            # ------------------------------------------------
+            # SEUIL DE CONFIANCE — rejet image hors domaine
+            # ------------------------------------------------
+            if conf < CONFIDENCE_THRESHOLD:
+                st.session_state['kidney_rejected'] = True
+                # Vider tout résultat précédent
+                for key in ['kidney_disease_fr',
+                            'kidney_confidence',
+                            'kidney_response',
+                            'kidney_history',
+                            'kidney_summary',
+                            'kidney_german']:
+                    if key in st.session_state:
+                        del st.session_state[key]
 
-            color = {
-                'Normal'      : '🟢',
-                'Kyste'       : '🟡',
-                'Calcul rénal': '🟠',
-                'Tumeur'      : '🔴'
-            }.get(fr, '⚪')
+                st.error(
+                    f"⚠️ **Image non reconnue comme CT scan rénal**\n\n"
+                    f"Confiance maximale obtenue : **{conf:.1%}** "
+                    f"(seuil requis : {CONFIDENCE_THRESHOLD:.0%})\n\n"
+                    f"Le modèle n'est entraîné que sur des images "
+                    f"CT scan de reins présentant : "
+                    f"**Kyste · Normal · Calcul rénal · Tumeur**.\n\n"
+                    f"Veuillez charger une image CT scan rénale valide."
+                )
+                st.markdown("**Probabilités obtenues :**")
+                for cls, prob in probs.items():
+                    st.progress(prob / 100,
+                                text=f"{cls} : {prob:.1f}%")
 
-            st.success(f"{color} **Résultat : {fr}**")
-            st.metric("Confiance", f"{conf:.1%}")
+            else:
+                # Image valide — on efface le rejet précédent
+                st.session_state.pop('kidney_rejected', None)
+                st.session_state['kidney_disease_fr'] = fr
+                st.session_state['kidney_confidence'] = conf
+                st.session_state['kidney_history']    = []
 
-            st.markdown("**Probabilités :**")
-            for cls, prob in probs.items():
-                st.progress(prob / 100,
-                            text=f"{cls} : {prob:.1f}%")
+                color = {
+                    'Normal'      : '🟢',
+                    'Kyste'       : '🟡',
+                    'Calcul rénal': '🟠',
+                    'Tumeur'      : '🔴'
+                }.get(fr, '⚪')
+
+                st.success(f"{color} **Résultat : {fr}**")
+                st.metric("Confiance", f"{conf:.1%}")
+
+                st.markdown("**Probabilités :**")
+                for cls, prob in probs.items():
+                    st.progress(prob / 100,
+                                text=f"{cls} : {prob:.1f}%")
 
 
 # ============================================================
 # CHATBOT + TRADUCTION + RÉSUMÉ + AUDIO
 # ============================================================
 
-if 'kidney_disease_fr' in st.session_state:
+# N'afficher le chatbot QUE si l'image est valide
+if ('kidney_disease_fr' in st.session_state and
+        'kidney_rejected' not in st.session_state):
+
     fr   = st.session_state['kidney_disease_fr']
     conf = st.session_state['kidney_confidence']
 
@@ -111,21 +149,17 @@ if 'kidney_disease_fr' in st.session_state:
     st.info(f"🔬 Maladie détectée : **{fr}** | "
             f"Confiance : **{conf:.1%}**")
 
-    # Initialiser historique
     if 'kidney_history' not in st.session_state:
         st.session_state['kidney_history'] = []
 
-    # Afficher historique
     for msg in st.session_state['kidney_history']:
         with st.chat_message(msg['role']):
             st.write(msg['content'])
 
-    # Input utilisateur
     user_input = st.chat_input(
         "Posez une question sur votre diagnostic...")
 
     if user_input:
-        # Ajouter message user
         st.session_state['kidney_history'].append({
             "role"   : "user",
             "content": user_input
@@ -133,12 +167,11 @@ if 'kidney_disease_fr' in st.session_state:
         with st.chat_message("user"):
             st.write(user_input)
 
-        # Réponse LLM
         with st.spinner("Réflexion en cours..."):
             response = chat_kidney(
                 disease_fr           = fr,
                 confidence           = conf,
-                conversation_history = \
+                conversation_history =
                     st.session_state['kidney_history']
             )
 
@@ -149,7 +182,6 @@ if 'kidney_disease_fr' in st.session_state:
         with st.chat_message("assistant"):
             st.write(response)
 
-        # Stocker dernière réponse
         st.session_state['kidney_response'] = response
 
     # --- Traduction + Résumé + Audio ---
@@ -160,7 +192,6 @@ if 'kidney_disease_fr' in st.session_state:
         st.subheader("🌍 Traduction & Résumé & Audio")
 
         col1, col2 = st.columns(2)
-
         with col1:
             if st.button("Générer résumé + traduction"):
                 with st.spinner("Génération..."):
@@ -175,15 +206,12 @@ if 'kidney_disease_fr' in st.session_state:
             with col1:
                 st.markdown("#### 🇫🇷 Résumé (Français)")
                 st.write(st.session_state['kidney_summary'])
-
-                # Audio français
                 try:
-                    tts    = gTTS(
-                        text = st.session_state[
-                            'kidney_summary'],
+                    tts = gTTS(
+                        text = st.session_state['kidney_summary'],
                         lang = 'fr'
                     )
-                    tmp    = tempfile.NamedTemporaryFile(
+                    tmp = tempfile.NamedTemporaryFile(
                         delete=False, suffix='.mp3')
                     tts.save(tmp.name)
                     st.audio(tmp.name, format='audio/mp3')
@@ -194,15 +222,12 @@ if 'kidney_disease_fr' in st.session_state:
             with col2:
                 st.markdown("#### 🇩🇪 Zusammenfassung")
                 st.write(st.session_state['kidney_german'])
-
-                # Audio allemand
                 try:
-                    tts    = gTTS(
-                        text = st.session_state[
-                            'kidney_german'],
+                    tts = gTTS(
+                        text = st.session_state['kidney_german'],
                         lang = 'de'
                     )
-                    tmp    = tempfile.NamedTemporaryFile(
+                    tmp = tempfile.NamedTemporaryFile(
                         delete=False, suffix='.mp3')
                     tts.save(tmp.name)
                     st.audio(tmp.name, format='audio/mp3')
