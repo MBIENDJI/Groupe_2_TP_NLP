@@ -60,6 +60,12 @@ div[data-baseweb="select"] li:hover {
     background-color: #8B0000 !important;
     font-weight: bold !important;
 }
+
+.stSelectbox > div > div > div {
+    color: #ffffff !important;
+    background-color: #8B0000 !important;
+    font-weight: bold !important;
+}
     .stAlert { background-color: rgba(0, 0, 0, 0.8) !important; border-left: 3px solid #00ff88 !important; }
     .footer { text-align: center; padding: 20px; color: #666666; font-size: 0.8rem; border-top: 1px solid #00ff88; margin-top: 50px; }
     .metric-card { background: rgba(0, 0, 0, 0.6); border-radius: 15px; padding: 15px; border: 1px solid #00ff88; text-align: center; }
