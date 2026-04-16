@@ -32,13 +32,34 @@ st.markdown("""
     [data-testid="stSidebar"] { background: #0a0a0a !important; border-right: 2px solid #00ff88 !important; }
     .stSelectbox > div > div { background-color: #1e1e2e !important; border: 2px solid #00ff88 !important; border-radius: 10px !important; }
     .stSelectbox > div > div > div { color: #ffffff !important; background-color: #1e1e2e !important; }
-    div[data-baseweb="select"] ul { background-color: #1e1e2e !important; border: 1px solid #00ff88 !important; }
-    div[data-baseweb="select"] li { color: #ffffff !important; background-color: #1e1e2e !important; }
-    div[data-baseweb="select"] li:hover { background-color: #00ff88 !important; color: #000000 !important; }
-    .stSlider > div > div > div { background-color: #00ff88 !important; }
-    .stButton > button { background: linear-gradient(90deg, #00ff88, #00b4d8) !important; color: #000000 !important; font-weight: bold !important; border-radius: 30px !important; border: none !important; padding: 12px 24px !important; transition: all 0.3s ease !important; }
-    .stButton > button:hover { transform: scale(1.02) !important; box-shadow: 0 0 20px rgba(0, 255, 136, 0.5) !important; }
-    .stCheckbox label span { color: #ffffff !important; }
+    div[data-baseweb="select"] ul {
+    background-color: #8B0000 !important;  /* Rouge foncé */
+    border: 2px solid #ff4444 !important;
+}
+
+div[data-baseweb="select"] li {
+    color: #ffffff !important;
+    background-color: #8B0000 !important;
+    font-weight: bold !important;
+}
+
+div[data-baseweb="select"] li:hover {
+    background-color: #ff0000 !important;
+    color: #ffffff !important;
+}
+
+/* Le select lui-même */
+.stSelectbox > div > div {
+    background-color: #8B0000 !important;
+    border: 2px solid #ff4444 !important;
+    border-radius: 10px !important;
+}
+
+.stSelectbox > div > div > div {
+    color: #ffffff !important;
+    background-color: #8B0000 !important;
+    font-weight: bold !important;
+}
     .stAlert { background-color: rgba(0, 0, 0, 0.8) !important; border-left: 3px solid #00ff88 !important; }
     .footer { text-align: center; padding: 20px; color: #666666; font-size: 0.8rem; border-top: 1px solid #00ff88; margin-top: 50px; }
     .metric-card { background: rgba(0, 0, 0, 0.6); border-radius: 15px; padding: 15px; border: 1px solid #00ff88; text-align: center; }
