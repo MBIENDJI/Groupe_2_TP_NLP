@@ -5,7 +5,6 @@ import numpy as np
 import plotly.graph_objects as go
 import sys
 import os
-import time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -23,15 +22,6 @@ st.title("📈 Prédiction Boursière")
 st.markdown("**LSTM · Prophet · NeuralProphet**")
 st.markdown("---")
 
-
-def compute_mape(actual, predicted):
-    actual, predicted = np.array(actual).flatten(), np.array(predicted).flatten()
-    n = min(len(actual), len(predicted))
-    actual, predicted = actual[-n:], predicted[-n:]
-    mask = actual != 0
-    return float(np.mean(np.abs((actual[mask] - predicted[mask]) / actual[mask])) * 100) if np.any(mask) else 999.0
-
-
 def make_chart(df, predictions_dict, company, months):
     fig = go.Figure()
     hist = df.tail(90)
@@ -42,7 +32,6 @@ def make_chart(df, predictions_dict, company, months):
     fig.add_trace(go.Scatter(x=[df.index[-1]], y=[float(df['Close'].iloc[-1])], mode='markers', name="📍 Aujourd'hui", marker=dict(size=14, color='#ff4444', symbol='star')))
     fig.update_layout(title=f"📊 {company} — {months} mois", xaxis_title="Date", yaxis_title="Prix ($)", template="plotly_dark", height=500)
     return fig
-
 
 col1, col2 = st.columns(2)
 with col1:
@@ -56,39 +45,47 @@ with c1:
 with c2:
     use_prophet = st.checkbox("✅ Prophet", value=True)
 with c3:
-    use_neural = st.checkbox("🧠 NeuralProphet (lent)", value=False)
-
-neural_ok = check_neuralprophet()
-if use_neural and not neural_ok:
-    st.error("⚠️ NeuralProphet incompatible avec ce serveur. Utilisez LSTM et Prophet.")
-    use_neural = False
-
-
-@st.cache_resource
-def get_lstm_cached(name):
-    return load_lstm(name)
+    use_neural = st.checkbox("🧠 NeuralProphet", value=False)
 
 @st.cache_data
 def get_data_cached(name):
     return get_stock_data(name)
 
+@st.cache_resource
+def get_lstm_cached(name):
+    return load_lstm(name)
 
 if st.button("🚀 Lancer les prédictions", type="primary"):
+    # Chargement des données avec vérification
     df = get_data_cached(company)
+    
+    if df is None or df.empty:
+        st.error(f"❌ Impossible de charger les données pour {company}. Vérifiez votre connexion.")
+        st.stop()
+    
+    if len(df) < 30:
+        st.warning(f"⚠️ Données insuffisantes ({len(df)} jours). Minimum 30 jours requis.")
+        st.stop()
+    
     current_price = float(df['Close'].iloc[-1])
     st.success(f"✅ {len(df)} jours | Prix: ${current_price:.2f}")
-
+    
     predictions_dict = {}
-
+    
     if use_lstm:
         with st.spinner("LSTM..."):
             try:
-                dates, preds = predict_lstm(get_lstm_cached(company), df, months)
-                predictions_dict['LSTM'] = {'dates': dates, 'preds': preds}
-                st.success("✅ LSTM")
+                model = get_lstm_cached(company)
+                if model:
+                    dates, preds = predict_lstm(model, df, months)
+                    if dates is not None:
+                        predictions_dict['LSTM'] = {'dates': dates, 'preds': preds}
+                        st.success("✅ LSTM")
+                else:
+                    st.warning("⚠️ Modèle LSTM non trouvé")
             except Exception as e:
                 st.warning(f"LSTM: {e}")
-
+    
     if use_prophet:
         with st.spinner("Prophet..."):
             try:
@@ -100,9 +97,8 @@ if st.button("🚀 Lancer les prédictions", type="primary"):
                 st.success("✅ Prophet")
             except Exception as e:
                 st.warning(f"Prophet: {e}")
-
-    if use_neural:
-        st.info("⏳ NeuralProphet: entraînement en cours (2-5 min)...")
+    
+    if use_neural and check_neuralprophet():
         with st.spinner("NeuralProphet..."):
             try:
                 np_model, np_df = train_neuralprophet(df)
@@ -111,66 +107,59 @@ if st.button("🚀 Lancer les prédictions", type="primary"):
                 st.success("✅ NeuralProphet")
             except Exception as e:
                 st.warning(f"NeuralProphet: {e}")
-
+    
     if predictions_dict:
-        st.session_state['stock_context'] = {
-            'company': company, 'months': months, 'current': current_price,
-            'lstm_pred': float(predictions_dict['LSTM']['preds'][-1]) if 'LSTM' in predictions_dict else 0,
-            'prophet_pred': float(predictions_dict['Prophet']['preds'][-1]) if 'Prophet' in predictions_dict else 0,
-            'neural_pred': float(predictions_dict['NeuralProphet']['preds'][-1]) if 'NeuralProphet' in predictions_dict else 0,
-        }
         st.session_state['stock_preds'] = predictions_dict
-        if 'stock_history' not in st.session_state:
-            st.session_state['stock_history'] = []
-
+        st.session_state['stock_current_price'] = current_price
+        st.session_state['stock_company'] = company
+        st.session_state['stock_months'] = months
 
 if 'stock_preds' in st.session_state:
-    ctx = st.session_state['stock_context']
     predictions_dict = st.session_state['stock_preds']
-    current_price = ctx['current']
-    df_cached = get_data_cached(ctx['company'])
+    current_price = st.session_state['stock_current_price']
+    company = st.session_state['stock_company']
+    months = st.session_state['stock_months']
+    
+    df = get_data_cached(company)
+    if df is not None:
+        fig = make_chart(df, predictions_dict, company, months)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Tableau
+        rows = []
+        for name, data in predictions_dict.items():
+            final = float(data['preds'][-1])
+            var = (final - current_price) / current_price * 100
+            rows.append({"Modèle": name, "Prix final": f"${final:.2f}", "Variation": f"{var:+.1f}%"})
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        
+        # Chatbot financier
+        st.markdown("---")
+        st.subheader("💬 Chatbot Financier")
+        
+        if 'stock_history' not in st.session_state:
+            st.session_state['stock_history'] = []
+        
+        for msg in st.session_state['stock_history']:
+            with st.chat_message(msg['role']):
+                st.write(msg['content'])
+        
+        user_input = st.chat_input("Posez une question...")
+        if user_input:
+            st.session_state['stock_history'].append({"role": "user", "content": user_input})
+            with st.chat_message("user"):
+                st.write(user_input)
+            with st.spinner("Réflexion..."):
+                response = chat_stock(
+                    company, months,
+                    float(predictions_dict.get('LSTM', {}).get('preds', [0])[-1]),
+                    float(predictions_dict.get('Prophet', {}).get('preds', [0])[-1]),
+                    float(predictions_dict.get('NeuralProphet', {}).get('preds', [0])[-1]),
+                    st.session_state['stock_history']
+                )
+            st.session_state['stock_history'].append({"role": "assistant", "content": response})
+            with st.chat_message("assistant"):
+                st.write(response)
 
-    st.markdown("---")
-    fig = make_chart(df_cached, predictions_dict, ctx['company'], ctx['months'])
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Métriques
-    st.subheader("📊 Comparaison")
-    cols = st.columns(len(predictions_dict) + 1)
-    cols[0].metric("💵 Prix actuel", f"${current_price:.2f}")
-    for i, (name, data) in enumerate(predictions_dict.items()):
-        final = float(data['preds'][-1])
-        delta = ((final / current_price) - 1) * 100
-        cols[i + 1].metric(f"🔮 {name}", f"${final:.2f}", f"{delta:+.1f}%")
-
-    # Tableau
-    rows = []
-    for name, data in predictions_dict.items():
-        final = float(data['preds'][-1])
-        var = (final - current_price) / current_price * 100
-        rows.append({"Modèle": name, "Prix final": f"${final:.2f}", "Variation": f"{var:+.1f}%", "Signal": "🟢 ACHAT" if var > 5 else "🟡 ATTENDRE" if var > 0 else "🔴 VENDRE"})
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-    # Chatbot financier
-    st.markdown("---")
-    st.subheader("💬 Chatbot Financier")
-    st.info(f"📊 {ctx['company']} | {ctx['months']} mois | Prix: ${ctx['current']:.2f}")
-
-    for msg in st.session_state['stock_history']:
-        with st.chat_message(msg['role']):
-            st.write(msg['content'])
-
-    user_input = st.chat_input("Posez une question...")
-    if user_input:
-        st.session_state['stock_history'].append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.write(user_input)
-        with st.spinner("Réflexion..."):
-            response = chat_stock(
-                ctx['company'], ctx['months'],
-                ctx['lstm_pred'], ctx['prophet_pred'], ctx['neural_pred'],
-                st.session_state['stock_history']
-            )
-        st.session_state['stock_history'].append({"role": "assistant", "content": response})
-        with st.chat_message("assistant"):
-            st.write(response)
+st.markdown("---")
+st.caption("⚠️ Prédictions générées par IA - Pas un conseil financier")
