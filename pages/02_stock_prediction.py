@@ -26,50 +26,103 @@ st.set_page_config(
 # ============================================================
 st.markdown("""
 <style>
-    .stApp { background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%); }
-    h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 { color: #00ff88 !important; }
-    p, li, span, label, .stMarkdown { color: #ffffff !important; }
-    [data-testid="stSidebar"] { background: #0a0a0a !important; border-right: 2px solid #00ff88 !important; }
-    .stSelectbox > div > div { background-color: #1e1e2e !important; border: 2px solid #00ff88 !important; border-radius: 10px !important; }
-    .stSelectbox > div > div > div { color: #ffffff !important; background-color: #1e1e2e !important; }
+    /* Fond global - Dégradé Bleu ciel vers Magenta */
+    .stApp {
+        background: linear-gradient(135deg, #87CEEB 0%, #FF00FF 100%) !important;
+    }
+    
+    /* Titres */
+    h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 { 
+        color: #000000 !important; 
+    }
+    
+    /* Texte */
+    p, li, span, label, .stMarkdown { 
+        color: #000000 !important; 
+    }
+    
+    /* Sidebar - Bleu ciel */
+    [data-testid="stSidebar"] {
+        background: #87CEEB !important;
+        border-right: 2px solid #FF00FF !important;
+    }
+    
+    /* Texte dans sidebar */
+    [data-testid="stSidebar"] p, 
+    [data-testid="stSidebar"] li, 
+    [data-testid="stSidebar"] span, 
+    [data-testid="stSidebar"] label {
+        color: #000000 !important;
+    }
+    
+    /* Titres dans sidebar */
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        color: #FF00FF !important;
+    }
+    
+    /* Selectbox - Rouge */
+    .stSelectbox > div > div {
+        background-color: #8B0000 !important;
+        border: 2px solid #ff4444 !important;
+        border-radius: 10px !important;
+    }
+    
+    .stSelectbox > div > div > div {
+        color: #ffffff !important;
+        background-color: #8B0000 !important;
+        font-weight: bold !important;
+    }
+    
+    /* Dropdown menu - Rouge */
     div[data-baseweb="select"] ul {
-    background-color: #8B0000 !important;  /* Rouge foncé */
-    border: 2px solid #ff4444 !important;
-}
-
-div[data-baseweb="select"] li {
-    color: #ffffff !important;
-    background-color: #8B0000 !important;
-    font-weight: bold !important;
-}
-
-div[data-baseweb="select"] li:hover {
-    background-color: #ff0000 !important;
-    color: #ffffff !important;
-}
-
-/* Le select lui-même */
-.stSelectbox > div > div {
-    background-color: #8B0000 !important;
-    border: 2px solid #ff4444 !important;
-    border-radius: 10px !important;
-}
-
-.stSelectbox > div > div > div {
-    color: #ffffff !important;
-    background-color: #8B0000 !important;
-    font-weight: bold !important;
-}
-
-.stSelectbox > div > div > div {
-    color: #ffffff !important;
-    background-color: #8B0000 !important;
-    font-weight: bold !important;
-}
-    .stAlert { background-color: rgba(0, 0, 0, 0.8) !important; border-left: 3px solid #00ff88 !important; }
-    .footer { text-align: center; padding: 20px; color: #666666; font-size: 0.8rem; border-top: 1px solid #00ff88; margin-top: 50px; }
-    .metric-card { background: rgba(0, 0, 0, 0.6); border-radius: 15px; padding: 15px; border: 1px solid #00ff88; text-align: center; }
-    .streamlit-expanderHeader { background-color: rgba(0, 0, 0, 0.6) !important; color: #00ff88 !important; border-radius: 10px !important; }
+        background-color: #8B0000 !important;
+        border: 2px solid #ff4444 !important;
+    }
+    
+    div[data-baseweb="select"] li {
+        color: #ffffff !important;
+        background-color: #8B0000 !important;
+        font-weight: bold !important;
+    }
+    
+    div[data-baseweb="select"] li:hover {
+        background-color: #ff0000 !important;
+        color: #ffffff !important;
+    }
+    
+    /* Alertes */
+    .stAlert { 
+        background-color: rgba(0, 0, 0, 0.8) !important; 
+        border-left: 3px solid #00ff88 !important; 
+    }
+    
+    /* Footer */
+    .footer { 
+        text-align: center; 
+        padding: 20px; 
+        color: #000000 !important; 
+        font-size: 0.8rem; 
+        border-top: 1px solid #FF00FF; 
+        margin-top: 50px; 
+    }
+    
+    /* Metric card */
+    .metric-card { 
+        background: rgba(0, 0, 0, 0.6); 
+        border-radius: 15px; 
+        padding: 15px; 
+        border: 1px solid #00ff88; 
+        text-align: center; 
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader { 
+        background-color: rgba(0, 0, 0, 0.6) !important; 
+        color: #00ff88 !important; 
+        border-radius: 10px !important; 
+    }
 </style>
 """, unsafe_allow_html=True)
 
