@@ -2,7 +2,9 @@
 import requests
 import os
 from config import HF_TOKEN, LLM_MODEL
-from chatbot.monitor import monitor
+
+# Importer monitor APRÈS sa définition (pas d'import circulaire)
+# from chatbot.monitor import monitor  ← À SUPPRIMER
 
 
 def call_llm(messages, max_tokens=500):
@@ -53,10 +55,10 @@ def call_llm(messages, max_tokens=500):
             else:
                 return str(result)
         else:
-            return f"Erreur API ({response.status_code}): Veuillez réessayer plus tard."
+            return f"⚠️ Service temporairement indisponible (code {response.status_code})"
             
     except Exception as e:
-        return f"Erreur de connexion : Le service est momentanément indisponible."
+        return f"⚠️ Erreur de connexion : Le service est momentanément indisponible."
 
 
 def chat_kidney(disease_fr, confidence, conversation_history):
@@ -85,9 +87,6 @@ def chat_kidney(disease_fr, confidence, conversation_history):
     ]
 
     response = call_llm(messages)
-    
-    # Log
-    monitor.log(last_user_msg, response, "kidney_chatbot")
     
     return response
 
@@ -118,8 +117,6 @@ def chat_stock(company, months, lstm_pred, prophet_pred, neural_pred, conversati
 
     response = call_llm(messages)
     
-    monitor.log(last_user_msg, response, "stock_chatbot")
-    
     return response
 
 
@@ -130,7 +127,6 @@ def translate_to_german(text):
         {"role": "user", "content": f"À traduire en allemand : {text}"}
     ]
     result = call_llm(messages, max_tokens=500)
-    monitor.log(text, result, "translation_de")
     return result
 
 
@@ -141,5 +137,4 @@ def generate_summary(text):
         {"role": "user", "content": f"Résume ceci : {text}"}
     ]
     result = call_llm(messages, max_tokens=300)
-    monitor.log(text, result, "summarizer")
     return result
