@@ -17,8 +17,13 @@ COMPANIES = {
 }
 
 WINDOW_SIZE = 60
-HF_TOKEN    = os.environ.get("HF_TOKEN", "")
-LLM_MODEL   = "mistralai/Mistral-7B-Instruct-v0.3"
+
+# Cherche sam_token EN PREMIER (ton secret Streamlit Cloud)
+# puis HF_TOKEN en fallback
+HF_TOKEN  = (os.environ.get("sam_token") or
+             os.environ.get("HF_TOKEN") or "")
+
+LLM_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
 
 # LangSmith
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
