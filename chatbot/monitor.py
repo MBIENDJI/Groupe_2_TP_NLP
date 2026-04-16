@@ -1,51 +1,34 @@
 # chatbot/monitor.py
+
+
+
+
 import os
+chatbot/monitor.py
 from datetime import datetime
 
 class LangSmithMonitor:
-    """Monitoring LangSmith des interactions."""
-
+    """Moniteur local - pas besoin d'API externe"""
+    
     def __init__(self):
-        self.api_key = os.environ.get("LANGCHAIN_API_KEY", "")
-        self.project = os.environ.get(
-            "LANGCHAIN_PROJECT", "kidney-stock-ai")
-        self.traces  = []
-
+        self.traces = []
+        print("✅ Monitoring actif (mode local)")
+    
     def log(self, input_text, output_text, model_name):
-        """Enregistre une interaction."""
         trace = {
-            "timestamp" : datetime.now().isoformat(),
-            "model"     : model_name,
-            "input"     : str(input_text)[:500],
-            "output"    : str(output_text)[:500],
-            "project"   : self.project
+            "timestamp": datetime.now().isoformat(),
+            "model": model_name,
+            "input": str(input_text)[:200],
+            "output": str(output_text)[:200],
         }
         self.traces.append(trace)
-
-        if self.api_key:
-            try:
-                from langsmith import Client
-                client = Client()
-                client.create_run(
-                    name     = model_name,
-                    run_type = "llm",
-                    inputs   = {"input" : trace["input"]},
-                    outputs  = {"output": trace["output"]}
-                )
-            except Exception as e:
-                print(f"LangSmith log error: {e}")
-
+        print(f"[MONITOR] {model_name}: {input_text[:50]}...")
         return trace
-
+    
     def get_stats(self):
-        """Retourne les statistiques."""
-        total = len(self.traces)
         return {
-            "total"      : total,
-            "models_used": list(set(
-                t["model"] for t in self.traces))
+            "total": len(self.traces),
+            "models_used": list(set(t["model"] for t in self.traces))
         }
 
-
-# Instance globale
 monitor = LangSmithMonitor()
