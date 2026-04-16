@@ -1,14 +1,20 @@
-# app.py
+# app.py (MODIFIÉ avec chatbot)
 import streamlit as st
 import torch
 import torch.nn as nn
 from torchvision import transforms, models
 from PIL import Image
 import os
+import sys
+
+# Ajouter le chemin pour les imports
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from chatbot.kidney_chatbot import kidney_chatbot
 
 # Configuration
 st.set_page_config(
-    page_title="Classification des Maladies Rénales",
+    page_title="Prédiction des Maladies des Reins",
     page_icon="🏥",
     layout="wide"
 )
@@ -64,7 +70,7 @@ def preprocess_image(image):
     return transform(image).unsqueeze(0).to(DEVICE)
 
 def main():
-    st.title("🏥 Classification des Maladies Rénales")
+    st.title("🏥 Prédiction des Maladies des Reins")
     st.markdown("### 🔬 Diagnostic par CNN EfficientNet-B0")
     st.markdown("---")
     
@@ -104,24 +110,31 @@ def main():
                     probs = torch.nn.functional.softmax(outputs, dim=1)
                     confidence, predicted = torch.max(probs, 1)
                 
+                diagnosis = CLASSES_FR[predicted.item()]
+                
                 with col2:
                     st.subheader("📊 Résultat")
                     st.progress(confidence.item())
                     
                     if confidence >= CONFIDENCE_THRESHOLD:
-                        st.success(f"### ✅ {CLASSES_FR[predicted.item()]}")
+                        st.success(f"### ✅ Diagnostic: {diagnosis}")
                         st.metric("Confiance", f"{confidence:.2%}")
                         
                         if predicted.item() == 1:
-                            st.info("✅ Résultat normal")
+                            recommendation = "Résultat normal. Continuez les contrôles réguliers."
+                            st.info(recommendation)
                         elif predicted.item() == 0:
-                            st.warning("⚠️ Consultez un néphrologue")
+                            recommendation = "Consultez un néphrologue pour évaluation."
+                            st.warning(recommendation)
                         elif predicted.item() == 2:
-                            st.error("⚠️ Consultez un urologue")
+                            recommendation = "Consultez un urologue. Une intervention peut être nécessaire."
+                            st.error(recommendation)
                         else:
-                            st.error("🚨 Consultation urgente")
+                            recommendation = "Consultation urgente avec un oncologue recommandée."
+                            st.error(recommendation)
                     else:
-                        st.warning("### ⚠️ Image non reconnue")
+                        recommendation = "Image non reconnue. Veuillez consulter un radiologue."
+                        st.warning(f"### ⚠️ {recommendation}")
                         st.metric("Confiance max", f"{confidence:.2%}")
                     
                     with st.expander("📈 Détail des probabilités"):
@@ -129,6 +142,18 @@ def main():
                             prob = probs[0][i].item()
                             st.write(f"**{cls}**: {prob:.2%}")
                             st.progress(prob)
+                
+                # ============================================================
+                # CHATBOT INTELLIGENT
+                # ============================================================
+                if confidence >= CONFIDENCE_THRESHOLD:
+                    chatbot_result = kidney_chatbot.process_result(
+                        diagnosis=diagnosis,
+                        confidence=confidence,
+                        recommendation=recommendation
+                    )
+                    kidney_chatbot.display_chatbot_ui(chatbot_result)
+    
     else:
         st.info("👈 Téléchargez une image CT du rein pour commencer")
 
