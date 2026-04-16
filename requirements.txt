@@ -3,3 +3,10 @@ torch
 torchvision
 Pillow
 numpy
+pandas
+yfinance
+plotly
+prophet
+neuralprophet
+joblib
+scikit-learn
