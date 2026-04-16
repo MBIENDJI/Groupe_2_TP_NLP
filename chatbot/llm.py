@@ -7,14 +7,16 @@ from chatbot.monitor import monitor
 
 def call_llm(messages, max_tokens=800):
     """
-    Appel HuggingFace Inference API.
-    messages : liste de dicts {role, content}
+    Appel HuggingFace Inference API — URL corrigée.
+    L'endpoint /v1/chat/completions n'est PAS dans /models/
+    il est sous api-inference.huggingface.co/v1/
     """
     if not HF_TOKEN:
         return "⚠️ HF_TOKEN manquant. Configurez le secret."
 
-    url     = (f"https://api-inference.huggingface.co"
-               f"/models/{LLM_MODEL}/v1/chat/completions")
+    # URL CORRECTE pour l'API conversationnelle HF
+    url = "https://api-inference.huggingface.co/v1/chat/completions"
+
     headers = {
         "Authorization": f"Bearer {HF_TOKEN}",
         "Content-Type" : "application/json"
@@ -29,26 +31,20 @@ def call_llm(messages, max_tokens=800):
     try:
         response = requests.post(
             url, headers=headers,
-            json=payload, timeout=30
+            json=payload, timeout=60
         )
         if response.status_code == 200:
             return (response.json()
                     ["choices"][0]["message"]["content"])
         else:
             return (f"Erreur API {response.status_code}: "
-                    f"{response.text[:200]}")
+                    f"{response.text[:300]}")
     except Exception as e:
         return f"Erreur de connexion : {str(e)}"
 
 
 def chat_kidney(disease_fr, confidence,
                 conversation_history):
-    """
-    Chatbot médical pour résultat CNN.
-    disease_fr : nom français de la maladie
-    confidence : float entre 0 et 1
-    conversation_history : liste de messages
-    """
     system = {
         "role"   : "system",
         "content": (
@@ -63,26 +59,19 @@ def chat_kidney(disease_fr, confidence,
         )
     }
     messages = [system] + conversation_history
-
     response = call_llm(messages)
-
-    # Log LangSmith
     monitor.log(
         input_text  = conversation_history[-1]["content"]
                       if conversation_history else "",
         output_text = response,
         model_name  = "kidney_chatbot"
     )
-
     return response
 
 
 def chat_stock(company, months, lstm_pred,
                prophet_pred, neural_pred,
                conversation_history):
-    """
-    Chatbot financier pour prédictions boursières.
-    """
     system = {
         "role"   : "system",
         "content": (
@@ -98,22 +87,17 @@ def chat_stock(company, months, lstm_pred,
         )
     }
     messages = [system] + conversation_history
-
     response = call_llm(messages)
-
-    # Log LangSmith
     monitor.log(
         input_text  = conversation_history[-1]["content"]
                       if conversation_history else "",
         output_text = response,
         model_name  = "stock_chatbot"
     )
-
     return response
 
 
 def translate_to_german(text):
-    """Traduit un texte en allemand via LLM."""
     messages = [{
         "role"   : "user",
         "content": (
@@ -128,7 +112,6 @@ def translate_to_german(text):
 
 
 def generate_summary(text):
-    """Génère un résumé court en français."""
     messages = [{
         "role"   : "user",
         "content": (
