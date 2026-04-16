@@ -120,14 +120,34 @@ def load_neuralprophet(company):
 # DONNÉES
 # ============================================================
 @st.cache_data
+@st.cache_data
 def get_stock_data(company, period='2y'):
-    try:
-        stock = yf.Ticker(COMPANIES[company])
-        df = stock.history(period=period)
-        df.index = df.index.tz_localize(None)
-        return df
-    except:
-        return None
+    ticker = COMPANIES[company]
+    
+    # Essayer plusieurs méthodes
+    methods = [
+        lambda: yf.Ticker(ticker).history(period=period),
+        lambda: yf.download(ticker, period=period, progress=False),
+    ]
+    
+    for i, method in enumerate(methods):
+        try:
+            df = method()
+            if df is not None and not df.empty:
+                df.index = pd.to_datetime(df.index)
+                df.index = df.index.tz_localize(None)
+                st.success(f"✅ {len(df)} jours chargés pour {ticker}")
+                return df
+        except:
+            continue
+    
+    # Fallback: données simulées pour test
+    st.warning(f"⚠️ Utilisation de données simulées pour {company}")
+    dates = pd.date_range(end=pd.Timestamp.now(), periods=500, freq='D')
+    np.random.seed(42)
+    prices = 100 + np.cumsum(np.random.randn(500) * 0.5)
+    df = pd.DataFrame({'Close': prices}, index=dates)
+    return df
 
 # ============================================================
 # FONCTION POUR CALCULER MAPE
