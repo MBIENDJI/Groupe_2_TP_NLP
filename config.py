@@ -23,8 +23,7 @@ WINDOW_SIZE = 60
 HF_TOKEN  = (os.environ.get("sam_token") or
              os.environ.get("HF_TOKEN") or "")
 
-LLM_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
-
+LLM_MODEL = "mistralai/Mistral-7B-Instruct-v0.2"  # ou "HuggingFaceH4/zephyr-7b-beta"
 # LangSmith
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_API_KEY"]    = os.environ.get(
