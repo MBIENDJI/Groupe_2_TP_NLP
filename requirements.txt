@@ -10,3 +10,6 @@ prophet
 neuralprophet
 joblib
 scikit-learn
+gTTS
+python-dotenv
+langsmith
