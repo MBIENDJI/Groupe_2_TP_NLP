@@ -1,4 +1,5 @@
-# chatbot/llm_groq.py
+# chatbot/llm_groq.pyimport os
+
 import os
 from groq import Groq
 from config import GROQ_API_KEY, LLM_MODEL
