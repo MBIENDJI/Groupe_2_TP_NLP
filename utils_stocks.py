@@ -6,6 +6,7 @@ import pandas as pd
 import yfinance as yf
 import json
 import os
+import sys
 from sklearn.preprocessing import MinMaxScaler
 from config import COMPANIES, WINDOW_SIZE
 
@@ -30,11 +31,9 @@ class StockLSTM(nn.Module):
 
     def forward(self, x):
         h0 = torch.zeros(self.num_layers,
-                         x.size(0),
-                         self.hidden_size)
+                         x.size(0), self.hidden_size)
         c0 = torch.zeros(self.num_layers,
-                         x.size(0),
-                         self.hidden_size)
+                         x.size(0), self.hidden_size)
         out, _ = self.lstm(x, (h0, c0))
         return self.fc(out[:, -1, :])
 
@@ -45,9 +44,9 @@ def load_lstm(company):
     if isinstance(checkpoint, dict) and \
        'model_state' in checkpoint:
         model = StockLSTM(
-            hidden_size = checkpoint.get('hidden_size', 64),
-            num_layers  = checkpoint.get('num_layers', 2),
-            dropout     = checkpoint.get('dropout', 0.2)
+            hidden_size=checkpoint.get('hidden_size', 64),
+            num_layers =checkpoint.get('num_layers', 2),
+            dropout    =checkpoint.get('dropout', 0.2)
         )
         model.load_state_dict(checkpoint['model_state'])
     else:
@@ -63,7 +62,7 @@ def load_lstm(company):
 
 def get_stock_data(company):
     ticker = COMPANIES[company]
-    df     = yf.download(
+    df = yf.download(
         ticker, period="5y",
         auto_adjust=True, progress=False)
     df.index = df.index.tz_localize(None)
@@ -86,8 +85,8 @@ def predict_lstm(model, df, n_months):
     last_win   = df['Close'].values[-WINDOW_SIZE:].flatten()
     last_sc    = scaler.transform(
         last_win.reshape(-1, 1)).flatten()
-    preds  = []
-    cur_w  = last_sc.copy()
+    preds = []
+    cur_w = last_sc.copy()
     with torch.no_grad():
         for _ in range(n_days):
             x  = torch.tensor(
@@ -111,14 +110,10 @@ def predict_lstm(model, df, n_months):
 
 # ============================================================
 # PROPHET — chargement JSON CORRIGÉ
+# model_from_json attend une STRING, pas un dict
 # ============================================================
 
 def load_prophet_from_json(company):
-    """
-    Chargement Prophet depuis JSON.
-    Utilise UNIQUEMENT model_from_json(string)
-    — ne touche jamais model.params directement.
-    """
     path = f"prophet_{company.lower()}.json"
     if not os.path.exists(path):
         return None
@@ -126,7 +121,7 @@ def load_prophet_from_json(company):
         from prophet.serialize import model_from_json
         with open(path, 'r') as f:
             json_str = f.read()          # lire comme STRING
-        model = model_from_json(json_str)  # passer la string
+        model = model_from_json(json_str)  # passer la STRING
         return model
     except Exception as e:
         print(f"Prophet JSON load error ({company}): {e}")
@@ -172,22 +167,47 @@ def predict_prophet(model, df, n_months):
 
 
 # ============================================================
-# NEURALPROPHET
+# NEURALPROPHET — guard Python 3.14 incompatible
 # ============================================================
 
+NEURALPROPHET_AVAILABLE = None  # None = pas encore testé
+
+def check_neuralprophet():
+    """
+    Vérifie si NeuralProphet est importable sur ce Python.
+    Python 3.14 casse la lib holidays donc NeuralProphet crashe.
+    """
+    global NEURALPROPHET_AVAILABLE
+    if NEURALPROPHET_AVAILABLE is not None:
+        return NEURALPROPHET_AVAILABLE
+    try:
+        import neuralprophet  # noqa
+        NEURALPROPHET_AVAILABLE = True
+    except Exception:
+        NEURALPROPHET_AVAILABLE = False
+    return NEURALPROPHET_AVAILABLE
+
+
 def train_neuralprophet(df):
+    """Entraîne NeuralProphet — lève RuntimeError si indisponible."""
+    if not check_neuralprophet():
+        raise RuntimeError(
+            "NeuralProphet incompatible avec Python "
+            f"{sys.version_info.major}.{sys.version_info.minor} "
+            "sur ce serveur. Utilisez LSTM et Prophet."
+        )
     from neuralprophet import NeuralProphet
     neural_df = pd.DataFrame({
         'ds': df.index,
         'y' : df['Close'].values.flatten()
     }).reset_index(drop=True)
     model = NeuralProphet(
-        yearly_seasonality = True,
-        weekly_seasonality = True,
-        n_lags             = 14,
-        epochs             = 20,
-        learning_rate      = 0.001,
-        batch_size         = 32,
+        yearly_seasonality=True,
+        weekly_seasonality=True,
+        n_lags            =14,
+        epochs            =20,
+        learning_rate     =0.001,
+        batch_size        =32,
     )
     model.fit(neural_df, freq='B', progress='none')
     return model, neural_df
@@ -217,7 +237,7 @@ def predict_neuralprophet(model, train_df, df, n_months):
         preds = fut[col].values
         dates = fut['ds'].values
     except Exception as e:
-        print(f"NeuralProphet fallback: {e}")
+        print(f"NeuralProphet predict fallback: {e}")
         trend = (float(df['Close'].iloc[-1]) -
                  float(df['Close'].iloc[-60])) / 60
         preds = np.array([
