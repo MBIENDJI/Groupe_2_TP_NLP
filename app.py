@@ -1,4 +1,4 @@
-# app.py (MODIFIÉ avec chatbot)
+# app.py
 import streamlit as st
 import torch
 import torch.nn as nn
@@ -14,16 +14,18 @@ from chatbot.kidney_chatbot import kidney_chatbot
 
 # Configuration
 st.set_page_config(
-    page_title="Prédiction des Maladies des Reins",
+    page_title="Classification des Maladies Rénales",
     page_icon="🏥",
     layout="wide"
 )
 
+# Classes
 CLASSES = ['Cyst', 'Normal', 'Stone', 'Tumor']
 CLASSES_FR = {0: 'Kyste', 1: 'Normal', 2: 'Calcul rénal', 3: 'Tumeur'}
 CONFIDENCE_THRESHOLD = 0.7
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# Modèle CNN
 class KidneyClassifier(nn.Module):
     def __init__(self, num_classes=4):
         super(KidneyClassifier, self).__init__()
@@ -70,7 +72,7 @@ def preprocess_image(image):
     return transform(image).unsqueeze(0).to(DEVICE)
 
 def main():
-    st.title("🏥 Prédiction des Maladies des Reins")
+    st.title("🏥 Classification des Maladies Rénales")
     st.markdown("### 🔬 Diagnostic par CNN EfficientNet-B0")
     st.markdown("---")
     
@@ -110,32 +112,36 @@ def main():
                     probs = torch.nn.functional.softmax(outputs, dim=1)
                     confidence, predicted = torch.max(probs, 1)
                 
-                diagnosis = CLASSES_FR[predicted.item()]
+                # Convertir les tenseurs en nombres Python
+                conf_value = confidence.item()
+                pred_value = predicted.item()
                 
                 with col2:
                     st.subheader("📊 Résultat")
-                    st.progress(confidence.item())
+                    st.progress(conf_value)
                     
-                    if confidence >= CONFIDENCE_THRESHOLD:
+                    if conf_value >= CONFIDENCE_THRESHOLD:
+                        diagnosis = CLASSES_FR[pred_value]
                         st.success(f"### ✅ Diagnostic: {diagnosis}")
-                        st.metric("Confiance", f"{confidence:.2%}")
+                        st.metric("Confiance", f"{conf_value:.2%}")
                         
-                        if predicted.item() == 1:
+                        if pred_value == 1:  # Normal
                             recommendation = "Résultat normal. Continuez les contrôles réguliers."
                             st.info(recommendation)
-                        elif predicted.item() == 0:
-                            recommendation = "Consultez un néphrologue pour évaluation."
+                        elif pred_value == 0:  # Cyst
+                            recommendation = "Kyste détecté. Consultez un néphrologue."
                             st.warning(recommendation)
-                        elif predicted.item() == 2:
-                            recommendation = "Consultez un urologue. Une intervention peut être nécessaire."
+                        elif pred_value == 2:  # Stone
+                            recommendation = "Calcul rénal détecté. Consultez un urologue."
                             st.error(recommendation)
-                        else:
-                            recommendation = "Consultation urgente avec un oncologue recommandée."
+                        else:  # Tumor
+                            recommendation = "Tumeur détectée. Consultation urgente avec un oncologue."
                             st.error(recommendation)
                     else:
+                        diagnosis = "Non reconnu"
                         recommendation = "Image non reconnue. Veuillez consulter un radiologue."
                         st.warning(f"### ⚠️ {recommendation}")
-                        st.metric("Confiance max", f"{confidence:.2%}")
+                        st.metric("Confiance maximale", f"{conf_value:.2%}")
                     
                     with st.expander("📈 Détail des probabilités"):
                         for i, cls in enumerate(CLASSES):
@@ -143,13 +149,11 @@ def main():
                             st.write(f"**{cls}**: {prob:.2%}")
                             st.progress(prob)
                 
-                # ============================================================
                 # CHATBOT INTELLIGENT
-                # ============================================================
-                if confidence >= CONFIDENCE_THRESHOLD:
+                if conf_value >= CONFIDENCE_THRESHOLD:
                     chatbot_result = kidney_chatbot.process_result(
                         diagnosis=diagnosis,
-                        confidence=confidence,
+                        confidence=conf_value,
                         recommendation=recommendation
                     )
                     kidney_chatbot.display_chatbot_ui(chatbot_result)
