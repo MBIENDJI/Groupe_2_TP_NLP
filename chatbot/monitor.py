@@ -1,10 +1,4 @@
 # chatbot/monitor.py
-
-
-
-
-import os
-chatbot/monitor.py
 from datetime import datetime
 
 class LangSmithMonitor:
@@ -22,7 +16,6 @@ class LangSmithMonitor:
             "output": str(output_text)[:200],
         }
         self.traces.append(trace)
-        print(f"[MONITOR] {model_name}: {input_text[:50]}...")
         return trace
     
     def get_stats(self):
@@ -31,4 +24,5 @@ class LangSmithMonitor:
             "models_used": list(set(t["model"] for t in self.traces))
         }
 
+# Créer l'instance globale APRÈS la définition de la classe
 monitor = LangSmithMonitor()
